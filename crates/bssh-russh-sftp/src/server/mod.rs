@@ -104,21 +104,24 @@ where
     run_with_config(stream, handler, Config::default()).await
 }
 
-/// Run processing stream as SFTP with custom configuration
+/// Run processing stream as SFTP with custom configuration.
+///
+/// This runs the SFTP request loop inline and returns when the client closes
+/// the stream (EOF). Callers are responsible for spawning this onto a task if
+/// they need it to run concurrently, and for closing the underlying SSH
+/// channel once it returns.
 pub async fn run_with_config<S, H>(mut stream: S, mut handler: H, cfg: Config)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     H: Handler + Send + 'static,
 {
-    tokio::spawn(async move {
-        loop {
-            match process_handler(&mut stream, &mut handler, &cfg).await {
-                Err(Error::UnexpectedEof) => break,
-                Err(err) => warn!("{}", err),
-                Ok(_) => (),
-            }
+    loop {
+        match process_handler(&mut stream, &mut handler, &cfg).await {
+            Err(Error::UnexpectedEof) => break,
+            Err(err) => warn!("{}", err),
+            Ok(_) => (),
         }
+    }
 
-        debug!("sftp stream ended");
-    });
+    debug!("sftp stream ended");
 }
